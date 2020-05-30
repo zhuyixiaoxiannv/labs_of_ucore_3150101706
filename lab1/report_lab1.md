@@ -422,7 +422,7 @@ As for the files, first is using GCC to compile the C code. Second write it into
 Actually, if I use the "make "V=" " command, the output is in the "makeout.txt" file. Your can see it. Here, you will see there's no space between -I and the include file or dictionary.
 
 2. 参考文件tools/sign.c里面的定义
-  第31和32行
+    第31和32行
 
   buf[510] = 0x55;
 
@@ -447,8 +447,14 @@ My answer:
 Windows 10  1909版本下使用Windows subsystem Linux（WSL），镜像使用的是Ubuntu 20.04 LTS
 首先，因为是命令行的模式，所以肯定没有GUI
 因而打开qemu首先必须加入参数-nographic
+另外只能使用虚拟终端，stdio不行
 
 *(2). 使用qemu
+
+我这边能够运行的起来的命令是
+qemu-system-i386 -s -S -hda ucore.img -monitor vc --nographic
+虽然会报个warning，说什么没有指定raw格式
+但是不是事儿
 
 *(3). gdb的使用
 
@@ -458,3 +464,18 @@ Windows 10  1909版本下使用Windows subsystem Linux（WSL），镜像使用�
 连接127.0.0.1:1234
 随后开始调试
 （目前表示还不能连上）
+OK终于搞定
+
+gdb的输出
+```
+(gdb) target remote localhost:1234
+Remote debugging using localhost:1234
+warning: No executable has been specified and target does not support
+determining executable automatically.  Try using the "file" command.
+0x0000fff0 in ?? ()
+(gdb) break *0x7c00
+Breakpoint 1 at 0x7c00
+(gdb) info breakpoint
+Num     Type           Disp Enb Address    What
+1       breakpoint     keep y   0x00007c00
+```
