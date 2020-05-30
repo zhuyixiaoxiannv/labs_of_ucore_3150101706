@@ -5,7 +5,9 @@
 1. 操作系统镜像文件ucore.img是如何一步一步生成的？(需要比较详细地解释Makefile中每一条相关命令和命令参数的含义，以及说明命令导致的结果)
 2. 一个被系统认为是符合规范的硬盘主引导扇区的特征是什么？
 
-Following is the makefile with some comments, and my comments are written in Chinese:
+My Answer：
+1. Following is the makefile with some comments, and my comments are written in Chinese:
+
 ```
 PROJ	:= challenge
 EMPTY	:=
@@ -131,6 +133,11 @@ TARGETS	:=
 #以及下面的call是makefile中使用别的函数的一种方式
 #（well, I will do some analysis to this function.mk file and the funcitons in it
 #but now, lets focus on the makefile code itself
+#这里面对几个需要使用到的函数进行了封装
+#add_files_cc添加了文件
+#以及后面的几个file都是生成目标文件
+#prefix是前缀的意思
+#patsubst是替换通配符的意思，并不懂这乱七八糟的语法（让本宝宝糟心）
 #---------------------------------------------------------------------------------------------------#
 include tools/function.mk
 
@@ -154,6 +161,10 @@ symfile = $(call cgtype,$(call toobj,$(1)),o,sym)
 match = $(shell echo $(2) | $(AWK) '{for(i=1;i<=NF;i++){if(match("$(1)","^"$$(i)"$$")){exit 1;}}}'; echo $$?)
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+#---------------------------------------------------------------------------------------------------#
+#总感觉接下来才是真的正儿八经的编译过程
+#开头include一些文件
+#---------------------------------------------------------------------------------------------------#
 # include kernel/user
 
 INCLUDE	+= libs/
@@ -178,7 +189,9 @@ KSRCDIR		+= kern/init \
 			   kern/driver \
 			   kern/trap \
 			   kern/mm
-
+#---------------------------------------------------------------------------------------------------#
+#指定kernel和kernel source dir
+#---------------------------------------------------------------------------------------------------#
 KCFLAGS		+= $(addprefix -I,$(KINCLUDE))
 
 $(call add_files_cc,$(call listf_cc,$(KSRCDIR)),kernel,$(KCFLAGS))
@@ -199,7 +212,9 @@ $(kernel): $(KOBJS)
 $(call create_target,kernel)
 
 # -------------------------------------------------------------------
-
+#---------------------------------------------------------------------------------------------------#
+#创建写入boot扇区的内容
+#---------------------------------------------------------------------------------------------------#
 # create bootblock
 bootfiles = $(call listf_cc,boot)
 $(foreach f,$(bootfiles),$(call cc_compile,$(f),$(CC),$(CFLAGS) -Os -nostdinc))
@@ -222,7 +237,9 @@ $(call add_files_host,tools/sign.c,sign,sign)
 $(call create_target_host,sign,sign)
 
 # -------------------------------------------------------------------
-
+#---------------------------------------------------------------------------------------------------#
+#写入img文件
+#---------------------------------------------------------------------------------------------------#
 # create ucore.img
 UCOREIMG	:= $(call totarget,ucore.img)
 
@@ -249,7 +266,9 @@ ifeq ($(call match,$(MAKECMDGOALS),$(IGNORE_ALLDEPS)),0)
 endif
 
 # files for grade script
-
+#---------------------------------------------------------------------------------------------------#
+#感觉下面是一些函数
+#---------------------------------------------------------------------------------------------------#
 TARGETS: $(TARGETS)
 
 .DEFAULT_GOAL := TARGETS
@@ -401,3 +420,22 @@ Well, just some information , mostly about the files compiled, some are about th
 As for the files, first is using GCC to compile the C code. Second write it into the image.
 
 Actually, if I use the "make "V=" " command, the output is in the "makeout.txt" file. Your can see it. Here, you will see there's no space between -I and the include file or dictionary.
+
+2. 参考文件tools/sign.c里面的定义
+  第31和32行
+
+  buf[510] = 0x55;
+
+  buf[511] = 0xAA;
+
+  所以是0x55AA
+
+# 练习2
+
+1. 从CPU加电后执行的第一条指令开始，单步跟踪BIOS的执行。
+2. 在初始化位置0x7c00设置实地址断点,测试断点正常。
+3. 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与bootasm.S和 bootblock.asm进行比较。
+4. 自己找一个bootloader或内核中的代码位置，设置断点并进行测试。
+
+My answer:
+1.

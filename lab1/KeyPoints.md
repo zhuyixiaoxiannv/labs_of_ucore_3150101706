@@ -48,3 +48,9 @@ endif
 #### 工具
 objcopy是将二进制文件链接到可执行文件中的
 objdump则是查看内容的（表示并不很明白）
+
+#### 其他
+
+projectile文件是Emacs的管理工具吧
+
+反正我用vim
