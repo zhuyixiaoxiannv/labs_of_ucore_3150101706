@@ -442,7 +442,19 @@ My answer:
 一个是qemu中运行img，第二个是通过gdb使用qemu暴露的端口进行单步运行调试
 首先是qemu中运行img
 
-我的运行环境
+*(1). 我的运行环境
+
 Windows 10  1909版本下使用Windows subsystem Linux（WSL），镜像使用的是Ubuntu 20.04 LTS
 首先，因为是命令行的模式，所以肯定没有GUI
 因而打开qemu首先必须加入参数-nographic
+
+*(2). 使用qemu
+
+*(3). gdb的使用
+
+直接安装gdb工具（反正都是GNU的）
+然后输入gdb进入调试
+再输入target remote localhost:1234
+连接127.0.0.1:1234
+随后开始调试
+（目前表示还不能连上）
