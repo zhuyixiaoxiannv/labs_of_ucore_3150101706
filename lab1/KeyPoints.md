@@ -54,3 +54,5 @@ objdump则是查看内容的（表示并不很明白）
 projectile文件是Emacs的管理工具吧
 
 反正我用vim
+
+### qemu模拟和gdb相关

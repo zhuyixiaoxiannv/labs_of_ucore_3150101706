@@ -438,4 +438,6 @@ Actually, if I use the "make "V=" " command, the output is in the "makeout.txt" 
 4. 自己找一个bootloader或内核中的代码位置，设置断点并进行测试。
 
 My answer:
-1.
+1. 关于这个qemu的模拟，主要包括两个部分
+一个是qemu中运行img，第二个是通过gdb使用qemu暴露的端口进行单步运行调试
+首先是qemu中运行img
