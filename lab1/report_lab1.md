@@ -441,3 +441,8 @@ My answer:
 1. 关于这个qemu的模拟，主要包括两个部分
 一个是qemu中运行img，第二个是通过gdb使用qemu暴露的端口进行单步运行调试
 首先是qemu中运行img
+
+我的运行环境
+Windows 10  1909版本下使用Windows subsystem Linux（WSL），镜像使用的是Ubuntu 20.04 LTS
+首先，因为是命令行的模式，所以肯定没有GUI
+因而打开qemu首先必须加入参数-nographic
