@@ -438,25 +438,33 @@ Actually, if I use the "make "V=" " command, the output is in the "makeout.txt" 
 4. 自己找一个bootloader或内核中的代码位置，设置断点并进行测试。
 
 My answer:
-1. 关于这个qemu的模拟，主要包括两个部分
+
+#-----------------------------------------------------------------------------------------------
+
+* 调试的一些记录
+
+关于这个qemu的模拟，主要包括两个部分
 一个是qemu中运行img，第二个是通过gdb使用qemu暴露的端口进行单步运行调试
 首先是qemu中运行img
 
-*(1). 我的运行环境
+* (1). 我的运行环境
 
 Windows 10  1909版本下使用Windows subsystem Linux（WSL），镜像使用的是Ubuntu 20.04 LTS
-首先，因为是命令行的模式，所以肯定没有GUI
-因而打开qemu首先必须加入参数-nographic
-另外只能使用虚拟终端，stdio不行
 
-*(2). 使用qemu
+* (2). 使用qemu
 
 我这边能够运行的起来的命令是
 qemu-system-i386 -s -S -hda ucore.img -monitor vc --nographic
 虽然会报个warning，说什么没有指定raw格式
 但是不是事儿
 
-*(3). gdb的使用
+首先，因为是命令行的模式，所以肯定没有GUI
+因而打开qemu首先必须加入参数-nographic
+另外只能使用虚拟终端vc，stdio不行
+
+其实在Makefile中也是有定义make qemu的啦，但是，可以对比一下下上面我的命令和Makefile里面命令的不同，然后在我这边，make qemu真的跑不起来，原因见前文，会报错。。。所以不管了
+
+* (3). gdb的使用
 
 直接安装gdb工具（反正都是GNU的）
 然后输入gdb进入调试
@@ -466,7 +474,44 @@ qemu-system-i386 -s -S -hda ucore.img -monitor vc --nographic
 （目前表示还不能连上）
 OK终于搞定
 
+* (4). 关于gdb的gdbinit文件的使用
+
+gdb -tui -x tools/gdbinit
+
+需要注意tui参数在x参数前面（其实在文件路径后面也应该可以，但是我写成gdb -x -tui tools/gdbinit就报错
+
+* (5). 关于顺序
+
+先开qemu，再开启gdb -tui -x tools/gdbinit
+
+* (6). 总结
+
+我只描述在我的系统环境配置下需要做的事情
+首先，编译的时候需要指定Makefile里面加上-g允许调试信息，这是前置条件
+其次，编译完了之后，使用
+```
+qemu-system-i386 -s -S -hda bin/ucore.img -monitor vc --nographic
+```
+打开qemu
+最后，建一个新窗口用
+
+```
+gdb -tui -x tools/gdbinit
+```
+打开带text ui的gdb并使用设定好的gdbinit文件
+如果不需要的话呢，可以自己设定gdb的断点
+
+#-----------------------------------------------------------------------------------------------
+
+
+1. 
+
+
+
+2. 在初始化位置0x7c00设置实地址断点,测试断点正常。
+
 gdb的输出
+
 ```
 (gdb) target remote localhost:1234
 Remote debugging using localhost:1234
