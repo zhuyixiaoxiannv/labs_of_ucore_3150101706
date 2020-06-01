@@ -57,7 +57,62 @@ projectile文件是Emacs的管理工具吧
 
 ### qemu模拟和gdb相关
 
+（部分复制了report我写的内容，但并不完全）
+
+我只描述在我的系统环境配置下需要做的事情
+首先，编译的时候需要指定Makefile里面加上-g允许调试信息，这是前置条件
+其次，编译完了之后，使用
+
+```
+qemu-system-i386 -s -S -hda bin/ucore.img -monitor vc --nographic
+```
+
+打开qemu
+最后，建一个新窗口用
+
+```
+gdb -tui -x tools/gdbinit
+```
+
+打开带text ui的gdb并使用设定好的gdbinit文件
+如果不需要的话呢，可以自己设定gdb的断点，tui也可以不用
+
+然后用
+
+```
+target remote localhost:1234
+```
+
+来连接到qemu的模拟器
+
+然后关于用gdb调试
+
+```
+break *0x地址
+```
+
+打断点
+
+```
+x /10i 0x地址
+```
+
+表示执行地址随后的10条instructions
+
+用
+
+```
+si
+```
+
+指令单步执行。
+
+其他的，比如quit退出等等可以自行参照
+
+
+
 ### 硬件复位后执行的第一条指令
+
 ```
 9.1.4执行的第一条指令
 

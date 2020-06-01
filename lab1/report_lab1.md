@@ -489,6 +489,7 @@ gdb -tui -x tools/gdbinit
 我只描述在我的系统环境配置下需要做的事情
 首先，编译的时候需要指定Makefile里面加上-g允许调试信息，这是前置条件
 其次，编译完了之后，使用
+
 ```
 qemu-system-i386 -s -S -hda bin/ucore.img -monitor vc --nographic
 ```
@@ -585,8 +586,218 @@ Num     Type           Disp Enb Address    What
 
 3. 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与bootasm.S和 bootblock.asm进行比较。
 
+我把整个扇区搞下来，竟然还写满了，interesting。。。
+```
+(gdb) x /255i 0x7c00
+=> 0x7c00:      cli
+   0x7c01:      cld
+   0x7c02:      xor    %eax,%eax
+   0x7c04:      mov    %eax,%ds
+   0x7c06:      mov    %eax,%es
+   0x7c08:      mov    %eax,%ss
+   0x7c0a:      in     $0x64,%al
+   0x7c0c:      test   $0x2,%al
+   0x7c0e:      jne    0x7c0a
+   0x7c10:      mov    $0xd1,%al
+   0x7c12:      out    %al,$0x64
+   0x7c14:      in     $0x64,%al
+   0x7c16:      test   $0x2,%al
+   0x7c18:      jne    0x7c14
+   0x7c1a:      mov    $0xdf,%al
+   0x7c1c:      out    %al,$0x60
+   0x7c1e:      lgdtl  (%esi)
+   0x7c21:      insb   (%dx),%es:(%edi)
+   0x7c22:      jl     0x7c33
+   0x7c24:      and    %al,%al
+   0x7c26:      or     $0x1,%ax
+   0x7c2a:      mov    %eax,%cr0
+   0x7c2d:      ljmp   $0xb866,$0x87c32
+   0x7c34:      adc    %al,(%eax)
+   0x7c36:      mov    %eax,%ds
+   0x7c38:      mov    %eax,%es
+   0x7c3a:      mov    %eax,%fs
+   0x7c3c:      mov    %eax,%gs
+   0x7c3e:      mov    %eax,%ss
+   0x7c40:      mov    $0x0,%ebp
+   0x7c45:      mov    $0x7c00,%esp
+   0x7c4a:      call   0x7d0f
+--Type <RET> for more, q to quit, c to continue without paging--
+   0x7c4f:      jmp    0x7c4f
+   0x7c51:      lea    0x0(%esi),%esi
+   0x7c54:      add    %al,(%eax)
+   0x7c56:      add    %al,(%eax)
+   0x7c58:      add    %al,(%eax)
+   0x7c5a:      add    %al,(%eax)
+   0x7c5c:      (bad)
+   0x7c5d:      incl   (%eax)
+   0x7c5f:      add    %al,(%eax)
+   0x7c61:      lcall  $0x0,$0xffff00cf
+   0x7c68:      add    %dl,0x1700cf(%edx)
+   0x7c6e:      push   %esp
+   0x7c6f:      jl     0x7c71
+   0x7c71:      add    %dl,-0x77(%ebp)
+   0x7c74:      in     $0x57,%eax
+   0x7c76:      push   %esi
+   0x7c77:      mov    %eax,%esi
+   0x7c79:      push   %ebx
+   0x7c7a:      add    %edx,%eax
+   0x7c7c:      sub    $0x8,%esp
+   0x7c7f:      mov    $0x1f7,%ebx
+   0x7c84:      mov    %eax,-0x14(%ebp)
+   0x7c87:      mov    %ecx,%eax
+   0x7c89:      shr    $0x9,%ecx
+   0x7c8c:      and    $0x1ff,%eax
+   0x7c91:      sub    %eax,%esi
+   0x7c93:      lea    0x1(%ecx),%eax
+   0x7c96:      mov    %eax,-0x10(%ebp)
+   0x7c99:      cmp    -0x14(%ebp),%esi
+   0x7c9c:      jae    0x7d08
+   0x7c9e:      mov    %ebx,%edx
+   0x7ca0:      in     (%dx),%al
+--Type <RET> for more, q to quit, c to continue without paging--
+   0x7ca1:      and    $0xc0,%al
+   0x7ca3:      cmp    $0x40,%al
+   0x7ca5:      jne    0x7c9e
+   0x7ca7:      mov    $0x1f2,%edx
+   0x7cac:      mov    $0x1,%al
+   0x7cae:      out    %al,(%dx)
+   0x7caf:      mov    $0x1f3,%edx
+   0x7cb4:      mov    -0x10(%ebp),%al
+   0x7cb7:      out    %al,(%dx)
+   0x7cb8:      mov    -0x10(%ebp),%eax
+   0x7cbb:      mov    $0x1f4,%edx
+   0x7cc0:      shr    $0x8,%eax
+   0x7cc3:      out    %al,(%dx)
+   0x7cc4:      mov    -0x10(%ebp),%eax
+   0x7cc7:      mov    $0x1f5,%edx
+   0x7ccc:      shr    $0x10,%eax
+   0x7ccf:      out    %al,(%dx)
+   0x7cd0:      mov    -0x10(%ebp),%eax
+   0x7cd3:      mov    $0x1f6,%edx
+   0x7cd8:      shr    $0x18,%eax
+   0x7cdb:      and    $0xf,%al
+   0x7cdd:      or     $0xe0,%al
+   0x7cdf:      out    %al,(%dx)
+   0x7ce0:      mov    $0x20,%al
+   0x7ce2:      mov    %ebx,%edx
+   0x7ce4:      out    %al,(%dx)
+   0x7ce5:      mov    %ebx,%edx
+   0x7ce7:      in     (%dx),%al
+   0x7ce8:      and    $0xc0,%al
+   0x7cea:      cmp    $0x40,%al
+   0x7cec:      jne    0x7ce5
+   0x7cee:      mov    %esi,%edi
+--Type <RET> for more, q to quit, c to continue without paging--
+   0x7cf0:      mov    $0x80,%ecx
+   0x7cf5:      mov    $0x1f0,%edx
+   0x7cfa:      cld
+   0x7cfb:      repnz insl (%dx),%es:(%edi)
+   0x7cfd:      incl   -0x10(%ebp)
+   0x7d00:      add    $0x200,%esi
+   0x7d06:      jmp    0x7c99
+   0x7d08:      pop    %eax
+   0x7d09:      pop    %edx
+   0x7d0a:      pop    %ebx
+   0x7d0b:      pop    %esi
+   0x7d0c:      pop    %edi
+   0x7d0d:      pop    %ebp
+   0x7d0e:      ret
+   0x7d0f:      endbr32
+   0x7d13:      push   %ebp
+   0x7d14:      xor    %ecx,%ecx
+   0x7d16:      mov    %esp,%ebp
+   0x7d18:      mov    $0x1000,%edx
+   0x7d1d:      push   %esi
+   0x7d1e:      mov    $0x10000,%eax
+   0x7d23:      push   %ebx
+   0x7d24:      call   0x7c72
+   0x7d29:      cmpl   $0x464c457f,0x10000
+   0x7d33:      jne    0x7d74
+   0x7d35:      mov    0x1001c,%eax
+   0x7d3a:      movzwl 0x1002c,%esi
+   0x7d41:      lea    0x10000(%eax),%ebx
+   0x7d47:      shl    $0x5,%esi
+   0x7d4a:      add    %ebx,%esi
+   0x7d4c:      cmp    %esi,%ebx
+   0x7d4e:      jae    0x7d68
+--Type <RET> for more, q to quit, c to continue without paging--
+   0x7d50:      mov    0x8(%ebx),%eax
+   0x7d53:      add    $0x20,%ebx
+   0x7d56:      mov    -0x1c(%ebx),%ecx
+   0x7d59:      mov    -0xc(%ebx),%edx
+   0x7d5c:      and    $0xffffff,%eax
+   0x7d61:      call   0x7c72
+   0x7d66:      jmp    0x7d4c
+   0x7d68:      mov    0x10018,%eax
+   0x7d6d:      and    $0xffffff,%eax
+   0x7d72:      call   *%eax
+   0x7d74:      mov    $0xffff8a00,%edx
+   0x7d79:      mov    %edx,%eax
+   0x7d7b:      out    %ax,(%dx)
+   0x7d7d:      mov    $0xffff8e00,%eax
+   0x7d82:      out    %ax,(%dx)
+   0x7d84:      jmp    0x7d84
+   0x7d86:      add    %al,(%eax)
+   0x7d88:      adc    $0x0,%al
+   0x7d8a:      add    %al,(%eax)
+   0x7d8c:      add    %al,(%eax)
+   0x7d8e:      add    %al,(%eax)
+   0x7d90:      add    %edi,0x52(%edx)
+   0x7d93:      add    %al,(%ecx)
+   0x7d95:      jl     0x7d9f
+   0x7d97:      add    %ebx,(%ebx)
+   0x7d99:      or     $0x4,%al
+   0x7d9b:      add    $0x88,%al
+   0x7d9d:      add    %eax,(%eax)
+   0x7d9f:      add    %ch,(%eax,%eax,1)
+   0x7da2:      add    %al,(%eax)
+   0x7da4:      sbb    $0x0,%al
+   0x7da6:      add    %al,(%eax)
+--Type <RET> for more, q to quit, c to continue without paging--
+   0x7da8:      lret   $0xfffe
+   0x7dab:      lcall  *0x0(%ebp)
+   0x7db1:      inc    %ecx
+   0x7db2:      push   %cs
+   0x7db3:      or     %al,0x50d4202(%ebp)
+   0x7db9:      inc    %edx
+   0x7dba:      xchg   %eax,(%ebx)
+   0x7dbc:      xchg   %al,(%eax,%ecx,2)
+   0x7dbf:      addl   $0xffffffc6,0x41c38c02
+   0x7dc6:      inc    %ecx
+   0x7dc7:      movl   $0x4040c,-0x3b(%ecx)
+   0x7dce:      add    %al,(%eax)
+   0x7dd0:      sbb    $0x0,%al
+   0x7dd2:      add    %al,(%eax)
+   0x7dd4:      dec    %esp
+   0x7dd5:      add    %al,(%eax)
+   0x7dd7:      add    %dh,(%edi)
+   0x7dd9:      (bad)
+   0x7dda:      (bad)
+   0x7ddb:      pushl  0x0(%edi)
+   0x7dde:      add    %al,(%eax)
+   0x7de0:      add    %al,0xe(%ebp)
+   0x7de3:      or     %al,0x50d4402(%ebp)
+   0x7de9:      dec    %esp
+   0x7dea:      xchg   %al,(%ebx)
+   0x7dec:      addl   $0x0,(%eax,%eax,1)
+   0x7df0:      add    %al,(%eax)
+   0x7df2:      add    %al,(%eax)
+   0x7df4:      add    %al,(%eax)
+   0x7df6:      add    %al,(%eax)
+   0x7df8:      add    %al,(%eax)
+   0x7dfa:      add    %al,(%eax)
+--Type <RET> for more, q to quit, c to continue without paging--
+   0x7dfc:      add    %al,(%eax)
+   0x7dfe:      push   %ebp
+   0x7dff:      stos   %al,%es:(%edi)
+```
 
+和汇编源代码里面的代码比，emmm首先上面的代码肯定没到512字节，会有跳转，有些地方都不知道跳到那里去了。。。但就以我的汇编水准而言，我觉得还是基本上跟源文件翻译出来之后会有一定差别，包括编译优化啊等等。
 
+和生成后的asm文件对比，我觉得相比而言还是安排的明明白白的，至少跟反汇编的代码差别不大（只是不明白这个扇区后面的部分是什么玩意儿）因为源代码的汇编最后到了0x7d84，但是这里面整个扇区都写满了。
 
 
 4. 自己找一个bootloader或内核中的代码位置，设置断点并进行测试。
+和上面操作差不多，看明白就懂了。
+
+# 练习3：分析bootloader进入保护模式的过程。（要求在报告中写出分析）
