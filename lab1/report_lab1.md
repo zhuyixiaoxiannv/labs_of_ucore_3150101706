@@ -504,9 +504,67 @@ gdb -tui -x tools/gdbinit
 #-----------------------------------------------------------------------------------------------
 
 
-1. 
+1. 参考附录（原谅我之前没有看到，到处搜索资料。。。）
 
+首先我来补充一下自己知识的盲区，硬件复位后执行的第一条指令竟然并不是从0x7c00开始的，emmm这么说吧，因为bios的程序也是需要运行的，比如设定最基础的中断向量表等等，因此，在执行我们自己的代码之前，先要执行bios的代码。关于这部分的知识，附录中有一点点提到，我同样放在KeyPoints.txt里面。
 
+换而言之，整体执行过程是先BIOS，再bootloader，再kernel（也有可能在BootLoader和kernel中间存在更多级的跳转）
+
+这道题我单步执行的结果是
+
+```
+(gdb) set architecture i8086
+warning: A handler for the OS ABI "GNU/Linux" is not built into this configuration
+of GDB.  Attempting to continue with the default i8086 settings.
+
+The target architecture is assumed to be i8086
+(gdb) target remote localhost:1234
+Remote debugging using localhost:1234
+warning: No executable has been specified and target does not support
+determining executable automatically.  Try using the "file" command.
+0x0000fff0 in ?? ()
+(gdb) si
+0x0000e05b in ?? ()
+(gdb) si
+0x0000e062 in ?? ()
+(gdb) si
+0x0000e066 in ?? ()
+(gdb) x /2i 0xffff0
+   0xffff0:     ljmp   $0x3630,$0xf000e05b
+   0xffff7:     das
+(gdb) x /10i 0xfe05b
+   0xfe05b:     cmpw   $0xffc8,%cs:(%esi)
+   0xfe060:     bound  %eax,(%eax)
+   0xfe062:     jne    0xd241d0b2
+   0xfe068:     mov    %edx,%ss
+   0xfe06a:     mov    $0x7000,%sp
+   0xfe06e:     add    %al,(%eax)
+   0xfe070:     mov    $0x7c4,%dx
+   0xfe074:     verw   %cx
+   0xfe077:     stos   %eax,%es:(%edi)
+   0xfe078:     out    %al,(%dx)
+(gdb)
+```
+
+但是说几句实话（好吧有可能跟他使用的是AT&T的汇编指令格式有关系）
+
+首先我不是很明白这个0xffff0为啥变成了0xfff0（少了开头一个f，我知道就是会有段偏移导致的基地址加上地址的模式，但是，那也应该是0xf000fff0呀。其次我不清楚的是那个ljmp指令，和附录的指导相对比之后，有一些差别，我这里得到的代码是
+```
+(gdb) x /2i 0xffff0
+   0xffff0:     ljmp   $0x3630,$0xf000e05b
+   0xffff7:     das
+```
+
+但是在附录中的是
+
+```
+0xffff0: ljmp $0xf000,$0xe05b
+0xffff5: xor %dh,0x322f
+```
+
+换句话说，这个ljmp多了两个字节，导致下一条指令的代码从0xffff5跑到了0xffff7
+
+以及并不明白要弄个das指令来进行十进制减法调整是什么鬼。也许是BIOS的不同实现以及gdb在指令格式上面的写法不一样
 
 2. 在初始化位置0x7c00设置实地址断点,测试断点正常。
 
@@ -524,3 +582,11 @@ Breakpoint 1 at 0x7c00
 Num     Type           Disp Enb Address    What
 1       breakpoint     keep y   0x00007c00
 ```
+
+3. 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与bootasm.S和 bootblock.asm进行比较。
+
+
+
+
+
+4. 自己找一个bootloader或内核中的代码位置，设置断点并进行测试。
