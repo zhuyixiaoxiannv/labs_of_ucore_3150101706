@@ -801,3 +801,90 @@ Num     Type           Disp Enb Address    What
 和上面操作差不多，看明白就懂了。
 
 # 练习3：分析bootloader进入保护模式的过程。（要求在报告中写出分析）
+
+以下是对bootasm.s文件的一些阅读理解（我尽量只挑选重要的说）：
+
+整个大体的boot的部分，应该是bootasm用汇编写一些c里面无法编译的东西，然后跳转到bootmain.c的代码去执行，用于载入扇区，并检查一些重要的信息，然后再跳转到kernel去（但这个跳转并不返回，和传统的计算机上的代码并不相同），也难怪bootasm和反汇编得到的代码不同了，因为这个扇区里面还放了一些别的东西。
+
+bootasm.s
+
+```
+    cli                                             # Disable interrupts
+    cld                                             # String operations increment
+
+    # Set up the important data segment registers (DS, ES, SS).
+    xorw %ax, %ax                                   # Segment number zero
+    movw %ax, %ds                                   # -> Data Segment
+    movw %ax, %es                                   # -> Extra Segment
+    movw %ax, %ss                                   # -> Stack Segment
+
+```
+
+上面就是正常的关中断，cld使得df这个flag为0，从而string复制的时候地址为递增的。然后再把ax清零，ds，es，ss寄存器都清零。
+
+接下来是开A20地址线，事实上，并不止一种方法来开启A20地址线。这边只是记录一下这个代码做了什么，具体的内容我放到KeyPoints.txt文档中摘录和分析。
+
+```
+seta20.1:
+    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+    testb $0x2, %al
+    jnz seta20.1
+
+    movb $0xd1, %al                                 # 0xd1 -> port 0x64
+    outb %al, $0x64                                 # 0xd1 means: write data to 8042's P2 port
+
+seta20.2:
+    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+    testb $0x2, %al
+    jnz seta20.2
+
+    movb $0xdf, %al                                 # 0xdf -> port 0x60
+    outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
+
+```
+
+随后过程是加载gdt，使用lgdt指令——但这需要设置gdt字段
+
+```
+lgdt gdtdesc
+
+#---------------------------------------------------------------------------------------------------#
+
+.p2align 2                                          # force 4 byte alignment
+gdt:
+    SEG_NULLASM                                     # null seg
+    SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel
+    SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
+
+gdtdesc:
+    .word 0x17                                      # sizeof(gdt) - 1
+    .long gdt                                       # address gdt
+```
+
+之后是打开保护模式
+
+```
+    movl %cr0, %eax
+    orl $CR0_PE_ON, %eax
+    movl %eax, %cr0
+```
+
+前后两句是为了保存eax的值而不是为了别的目的
+
+最后是保护模式的一些代码并跳转到bootmain.c代码执行
+
+```
+    movw $PROT_MODE_DSEG, %ax                       # Our data segment selector
+    movw %ax, %ds                                   # -> DS: Data Segment
+    movw %ax, %es                                   # -> ES: Extra Segment
+    movw %ax, %fs                                   # -> FS
+    movw %ax, %gs                                   # -> GS
+    movw %ax, %ss                                   # -> SS: Stack Segment
+
+    # Set up the stack pointer and call into C. The stack region is from 0--start(0x7c00)
+    movl $0x0, %ebp
+    movl $start, %esp
+    call bootmain
+```
+
+这题目就算完成了吧，具体的知识点我去写KeyPoints里面去
