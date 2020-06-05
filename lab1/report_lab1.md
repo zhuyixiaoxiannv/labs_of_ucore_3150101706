@@ -897,5 +897,61 @@ gdtdesc:
 
 不过在此之前，需要看那节硬盘访问概述，了解，硬盘读取的众多端口和指令。并不在此记录，放在KeyPoints里面。（我真的不明白那个0x40是什么鬼，到时候测试一下下吧）
 
+对于ELF文件格式的内容也放在那边。下面只解释代码
 
+```
+static void
+readseg(uintptr_t va, uint32_t count, uint32_t offset) {
+    uintptr_t end_va = va + count;
+	#指向末尾扇区的位置
+    // round down to sector boundary
+    va -= offset % SECTSIZE;
+	#因为这个段肯定是连续的，所以减去后面的余数，每次开头部分加载一整个完整的扇区，但是结尾部分则多余的地方给删除掉
+    // translate from bytes to sectors; kernel starts at sector 1
+    uint32_t secno = (offset / SECTSIZE) + 1;
+	#读入扇区在内存中的位置，因为还有0扇区，所以+1
+    // If this is too slow, we could read lots of sectors at a time.
+    // We'd write more to memory than asked, but it doesn't matter --
+    // we load in increasing order.
+    for (; va < end_va; va += SECTSIZE, secno ++) {
+        readsect((void *)va, secno);
+        #每次加载一个扇区，然后加载完毕就好了
+    }
+}
 
+/* bootmain - the entry of bootloader */
+void
+bootmain(void) {
+    // read the 1st page off disk
+    readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
+	#先读入8个扇区（并不懂为啥这样大小）
+    // is this a valid ELF?
+    if (ELFHDR->e_magic != ELF_MAGIC) {
+        goto bad;
+    }
+	#检查是否损坏文件
+    struct proghdr *ph, *eph;
+	#定义两个program header，一个指向末尾，一个用于计数
+    // load each program segment (ignores ph flags)
+    ph = (struct proghdr *)((uintptr_t)ELFHDR + ELFHDR->e_phoff);
+    #将计数指针指向头部
+    eph = ph + ELFHDR->e_phnum;
+    #指向末尾
+    for (; ph < eph; ph ++) {
+        readseg(ph->p_va & 0xFFFFFF, ph->p_memsz, ph->p_offset);
+    }
+	#遍历，来读取某个segment
+    // call the entry point from the ELF header
+    // note: does not return
+    ((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();
+	#加载完毕可以执行了，并且不返回
+bad:
+    outw(0x8A00, 0x8A00);
+    outw(0x8A00, 0x8E00);
+
+    /* do nothing */
+    while (1);
+}
+```
+
+其他使用的函数，比如readsect，就是读一个硬盘的扇区，和前面提到的硬盘的有关。
