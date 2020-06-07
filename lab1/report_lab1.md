@@ -502,6 +502,11 @@ gdb -tui -x tools/gdbinit
 打开带text ui的gdb并使用设定好的gdbinit文件
 如果不需要的话呢，可以自己设定gdb的断点
 
+如果不需要gdb，直接去掉大S的选项
+```
+qemu-system-i386 -s -hda bin/ucore.img -monitor vc --nographic
+```
+
 #-----------------------------------------------------------------------------------------------
 
 
@@ -955,3 +960,107 @@ bad:
 ```
 
 其他使用的函数，比如readsect，就是读一个硬盘的扇区，和前面提到的硬盘的有关。
+
+另外，我觉得这里面用的ELF文件恐怕也需要加指定参数生成，因为，根本就没有后面其他部分的加载。
+
+# 练习5：实现函数调用堆栈跟踪函数 （需要编程）
+
+在这里我记录一下，这个实验中用到的一些函数的作用，以及编程的思路。
+
+### 首先是这些函数（包括其他文件中的）：
+1. read_ebp()
+得到目前的ebp
+
+2. read_eip()
+得到目前的eip值
+(容我说一句沙雕，这个，read_ebp函数放在x86.h下面，这个read_eip放在这个文件中。。。有猫饼) 哦好吧原来不是他沙雕，一个是内联函数放在x86下面，一个是非内联函数。我个人觉得理由是为了只让该文件中的函数调用read_eip（）这个函数，不然会很危险。
+
+3. 我觉得首先需要解决一个如何按格式输出的问题。
+这些东西其实放在stdio.h文件里面
+（另，就个人看了之后，觉得层次感还是不错的，首先最底下console搞定输出一个字符的问题，主要涉及到底层硬件问题，然后用stdarg这个东西进行封装——因为字符串还要考虑format这种，参数可变，最后是printfmt.c文件里面的输出字符串等等操作——总觉得自己睁着眼睛说瞎话）
+
+#### STDARG.H 文件
+这个函数提供一个可变参数的作用。
+必须说明的一点是，无论是linux还是这个ucore，实现其实差不多
+都有一句
+```
+typedef __builtin_va_list va_list;
+```
+或者类似的语句，这里必须指出的是__builtin_va_list
+这是一个编译器内置的东西，builtin的东西都是这样的。
+不要想太多，就这么搞下去就行了，
+```
+#define va_start(ap, last)              (__builtin_va_start(ap, last))
+##here，虽然ap没有指出，但是是一个va_list的类型。
+##因为栈的特性，所以用栈传参的话，last就是第一个参数的指针
+#define va_arg(ap, type)                (__builtin_va_arg(ap, type))
+##考虑到字节数，所以要加一个type
+#define va_end(ap)                      /*nothing*/
+##防止野指针用的，有始有终。
+```
+
+#### vprintfmt（）
+按照不同格式输出的函数就是这个，但是不同于平常C中写的printf
+注意这行
+```
+switch (ch = *(unsigned char *)fmt ++)
+```
+这里面的fmt首先可以指定多个参数（因为有个++），应该是个string吧，到时候测试一下下。
+然后它根据传入的fmt的参数进行处理，不同于C的printf，感觉他实现了一个**有限状态机**。
+还可以选择不同的putch（我觉得是考虑到linux重定向，它会写入文件对吧），这边一般用cputch（）
+
+注意：
+事实上，并不经常使用printfmt.c这个文件中的东西感觉（虽然在stdio.h）中被定义
+但是对他进行了封装，在stdio.c文件中，vcprintf（）调用了vprintfmt（）
+而随后，cprintf（）又调用了vcprintf（）
+所以最后一句话，直接调用cprintf就完事了。。。
+
+（我会说看了半天代码，从底层一直看到上层，然后发现这回事的嘛，心情沮丧，当然不会啦）
+
+比如说，到底哪些格式应该写成什么样子这些都是需要考虑的，而这些都要看源代码才知道。
+这里面进制数
+d是对有符号数十进制
+u表示无符号数十进制
+o表示无符号数八进制
+p表示无符号数十六进制
+
+（竟然不给文档。。心里一句mmp）
+
+4.关于代码中的3.2的部分，就是要取该地址的内容，而不是该地址
+注意到，ebp和eip就是指针，所以，直接读取的时候，虽然返回的是个uint32_t，但是可以作为一个指针来指向的。
+另外要考虑到位置。每个arg都是加1，一个地址占用32bits
+
+### 思路
+其实就按照源代码给的注释，但是我觉得有必要去解释一下。
+这里面一开始我不太明白最后那个popup做的是什么事情，然后我把读取两个point的事情放在了for循环里面
+
+但是实际上，他做的事情是这样的，一开始获取当前的栈，然后每次假装pop，但是，并不真的pop——那样会导致整个程序都出毛病，所以不需要改动真实的ebp，就只是需要提取出上一层函数的栈就可以了——最多调用20层。
+
+而这种方法做的就是每次迭代curr_ebp，就行了。
+
+另外注意，每次退栈之前，要先读取上一层函数的eip，不能反过来，不然会出错。
+
+### 运行结果
+```
+Kernel executable memory footprint: 68KB
+ebp:0x00007b28 eip:0x00100ab4 args:0x00010094 0x00010094 0x00007b58 0x00100096
+    kern/debug/kdebug.c:306: print_stackframe+23
+ebp:0x00007b38 eip:0x00100db7 args:0x00000000 0x00000000 0x00000000 0x00007ba8
+    kern/debug/kmonitor.c:125: mon_backtrace+11
+ebp:0x00007b58 eip:0x00100096 args:0x00000000 0x00007b80 0xffff0000 0x00007b84
+    kern/init/init.c:48: grade_backtrace2+34
+ebp:0x00007b78 eip:0x001000c4 args:0x00000000 0xffff0000 0x00007ba4 0x00000029
+    kern/init/init.c:53: grade_backtrace1+39
+ebp:0x00007b98 eip:0x001000e7 args:0x00000000 0x00100000 0xffff0000 0x0000001d
+    kern/init/init.c:58: grade_backtrace0+24
+ebp:0x00007bb8 eip:0x00100111 args:0x0010343c 0x00103420 0x0000130a 0x00000000
+    kern/init/init.c:63: grade_backtrace+35
+ebp:0x00007be8 eip:0x00100055 args:0x00000000 0x00000000 0x00000000 0x00007c4f
+    kern/init/init.c:28: kern_init+81
+ebp:0x00007bf8 eip:0x00007d74 args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8
+    <unknow>: -- 0x00007d70 --
+ebp:0x00000000 eip:0x00007c4f args:0xf000e2c3 0xf000ff53 0xf000ff53 0xf000ff54
+    <unknow>: -- 0x00007c4b --
+```
+
+这边我发现和gitbook给的结果有些不同，但是我检查了之后，觉得应该是这样没错。可能代码后来改动过。
