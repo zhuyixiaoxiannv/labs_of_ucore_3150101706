@@ -8,6 +8,8 @@
 My Answer：
 1. Following is the makefile with some comments, and my comments are written in Chinese:
 
+   （修改：我认为这部分的描述，看解释更好，如果要配置自己的Makefile的话，我觉得这个文件需要认真读一下，尤其是各种参数）
+
 ```
 PROJ	:= challenge
 EMPTY	:=
