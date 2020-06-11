@@ -47,9 +47,12 @@ idt_init(void) {
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
     extern uintptr_t __vectors[];
+    //修正，这里面的256，应该是要idt的大小除以gatedesc的大小来判断有多少个段描述符
     for(int i=0 ; i<256 ; ++i){
         SETGATE(idt[i],0,KERNEL_CS,__vectors[i],DPL_KERNEL);
     }
+    //修正，这边加了一句对switch的更改，但是在任务中，我觉得没有表现出来
+    //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     lidt(&idt_pd);
 }
 
@@ -153,7 +156,7 @@ trap_dispatch(struct trapframe *tf) {
          * (3) Too Simple? Yes, I think so!
          */
         ticks++;
-        if(ticks%100==0)
+        if(ticks%100==0)    //修正，这边要用定义好的宏TICK_NUM
             print_ticks();
         break;
     case IRQ_OFFSET + IRQ_COM1:

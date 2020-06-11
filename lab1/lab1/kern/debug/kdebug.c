@@ -304,6 +304,7 @@ print_stackframe(void) {
       */
     uint32_t* curr_ebp=read_ebp();
     uint32_t* curr_eip=read_eip();
+    //读了代码之后我觉得差别不是很大，我觉得需要注意的地方是在for循环里面的终止条件里面加上了ebp != 0
     for (int i = 0 ; i < STACKFRAME_DEPTH ; ++i )
     {
         cprintf("ebp:%08p eip:%08p ",curr_ebp,curr_eip);
