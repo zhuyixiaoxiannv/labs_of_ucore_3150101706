@@ -11,6 +11,9 @@ emmm我是直接复制过去了，但是，怎么说呢，不是那么的emmmm�
 （据说lab1和lab2都很难。。。）
 
 lab2代码中比起lab1中多出来的部分：
+
+（其实读着读着，感觉就明白做了什么，实验代码反而只是一个实现，感觉也就这样吧）
+
 #### 1. bootasm.s
 ```
 probe_memory:
@@ -80,9 +83,17 @@ struct e820map {
 
 描述最后一个可用内存段的baseaddr+length即可得到内存容量
 
-然后查看了代码之后，发现，没有置位也就是int15调用失败就往0x8000位置写入12345。。。而且。另一件事情就是，如果因为内存分段不是全都连续的，这么做，**只会探测出最后一段可用内存的起始位置**。。。
+~~然后查看了代码之后，发现，没有置位也就是int15调用失败就往0x8000位置写入12345。。。而且。另一件事情就是，如果因为内存分段不是全都连续的，这么做，**只会探测出最后一段可用内存的起始位置**。。。~~
 
-所以真正的os（按照前面的说法，还要各种探测方法轮换使用），有时候需要管理这些未必连续的地址，那就不是一个地址描述符够用的了。
+~~所以真正的os（按照前面的说法，还要各种探测方法轮换使用），有时候需要管理这些未必连续的地址，那就不是一个地址描述符够用的了。~~
+
+well，我为我之前这段话写的错误表示道歉，事实上，c代码中定义的e820map包含了最多20个可用的内存段的信息。
+
+因为他用了个数组，map[E820MAX]。
+
+而在boot的这段汇编代码中，并没有对于到底有多少个连续的内存段的探测，所以上限其实可能超过20个，并且在内存检测中，也没有把这个上限当回事，ECX只是描述描述符占用地址大小的——尽管这在通常情况下不会导致错误，正如一般来说堆栈并不会溢出一样。但并不绝对。
+
+在page_init这个函数的开始，就对于这个数据
 
 #### 2. entyr.s
 
@@ -119,6 +130,167 @@ ucore内核的链接地址==ucore内核的虚拟地址；boot loader加载ucore�
 ```
 从而真的开启了虚拟地址。
 
+**tools/kernel.ld**
+
 另外需要注意的是tools/kernel.ld文件里面的链接地址，对比lab1里面的链接地址（那个时候没有开启虚拟地址，所以链接地址为实际加载的位置。
 
 并且，因为这个原因，存在地址的转换，所以不能使用C代码，需要一个汇编代码来搞定。
+
+随后，它重新设置了kernel的堆栈
+
+另外，附录C中有段话我觉得也比较重要
+
+```
+edata/end/text的含义
+
+在基于ELF执行文件格式的代码中，存在一些对代码和数据的表述，基本概念如下：
+
+BSS段（bss segment）：指用来存放程序中未初始化的全局变量的内存区域。BSS是英文Block Started by Symbol的简称。BSS段属于静态内存分配。
+数据段（data segment）：指用来存放程序中已初始化的全局变量的一块内存区域。数据段属于静态内存分配。
+代码段（code segment/text segment）：指用来存放程序执行代码的一块内存区域。这部分区域的大小在程序运行前就已经确定，并且内存区域通常属于只读, 某些架构也允许代码段为可写，即允许修改程序。在代码段中，也有可能包含一些只读的常数变量，例如字符串常量等。
+在lab2/kern/init/init.c的kern_init函数中，声明了外部全局变量：
+extern char edata[], end[];
+但搜寻所有源码文件*.[ch]，没有发现有这两个变量的定义。那这两个变量从哪里来的呢？其实在lab2/tools/kernel.ld中，可以看到如下内容：
+
+…
+.text : {
+        *(.text .stub .text.* .gnu.linkonce.t.*)
+}
+…
+    .data : {
+        *(.data)
+}
+…
+PROVIDE(edata = .);
+…
+    .bss : {
+        *(.bss)
+}
+…
+PROVIDE(end = .);
+…
+这里的“.”表示当前地址，“.text”表示代码段起始地址，“.data”也是一个地址，可以看出，它即代表了代码段的结束地址，也是数据段的起始地址。类推下去，“edata”表示数据段的结束地址，“.bss”表示数据段的结束地址和BSS段的起始地址，而“end”表示BSS段的结束地址。
+
+这样回头看kerne_init中的外部全局变量，可知edata[]和 end[]这些变量是ld根据kernel.ld链接脚本生成的全局变量，表示相应段的起始地址或结束地址等，它们不在任何一个.S、.c或.h文件中定义。
+```
+
+**页目录基地址寄存器**
+
+分页之后其内容一定是4k字节对齐的，所以，末12位是0。
+
+在entry.s文件中，除了代码之外，还有一个页目录的数据结构。
+
+（算了先不管这个了）
+
+#### 3. pmm.c(主要是pmm_init)
+在kernel中执行的pmm_init是其顶层函数之一
+1. 第一行，boot_cr3是个在这个c文件中定义的一个变量，反正意思就是boot过程中用的页目录表基地址呗，PADDR则是一个将虚拟地址减去0xC。。。。的一个操作，但是对于虚拟地址小于这个base地址还报个错。
+
+  ```
+  boot_cr3 = PADDR(boot_pgdir);
+  ```
+
+  
+
+2. 接下来，init_pmm_manager(),这函数就很简单，调用了default pmm_manager的一个init方法，并且输出当前的memory management的名字。
+
+  ```
+  static void
+  init_pmm_manager(void) {
+      pmm_manager = &default_pmm_manager;
+      cprintf("memory management: %s\n", pmm_manager->name);
+      pmm_manager->init();
+  }
+  ```
+
+  
+
+  至于pmm_manager的init
+
+  ```
+  default_init(void) {
+      list_init(&free_list);
+      nr_free = 0;
+  }
+  ```
+
+  
+
+  首先得说起来，list.h里面定义的一个双向链表，pmm_manager中只有一个这个双向链表的init，也就是list_init()，而这个init，做的很简单，生成一个节点，然后前向指针指向他自己，后向指针也指向他自己就完了，就一个节点。
+
+  而对于这个节点，这个free_area_t是一个struct，他的定义在，memlayout.h里面：
+
+```
+typedef struct {
+    list_entry_t free_list;         // the list header
+    unsigned int nr_free;           // # of free pages in this free list
+} free_area_t;
+```
+​	其中list_entry_t 则被定义在list.h里面
+
+​	反正就是初始化一个描述双向链表的数据结构。
+3. 然后是page_init()
+    这里面就是用到了前面探测的e820map的信息
+
+  首先来设置kernel的内存分页。
+
+  第一步遍历所有的每个表项，然后得到mem的top（要么是KMEMSIZE，要么就是比这小的可用地址上限，反正两个取小的，这里面可用内存的上限表示为maxpa，也就是max physical address。
+
+  ```
+  cprintf("e820map:\n");
+      int i;
+      for (i = 0; i < memmap->nr_map; i ++) {
+          uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
+          cprintf("  memory: %08llx, [%08llx, %08llx], type = %d.\n",
+                  memmap->map[i].size, begin, end - 1, memmap->map[i].type);
+          if (memmap->map[i].type == E820_ARM) {
+              if (maxpa < end && begin < KMEMSIZE) {
+                  maxpa = end;
+              }
+          }
+      }
+      if (maxpa > KMEMSIZE) {
+          maxpa = KMEMSIZE;
+      }
+  ```
+
+  
+
+  然后，注意这里面用到的一个extern char end()前面提到过，是ld链接脚本的数据，表示BSS段的结束。
+
+  ~~前面得到了，Kernel可用地址的上限，这边的end表示内核代码和静态数据段的结束，在end和可用地址上限之间，则是我们在kernel中可以使用的地址。~~
+
+  ~~又因为要分页，所以，end对4k页对齐并向上取整。完了就可以分页了。~~
+
+  
+
+  好吧，我太天真了。这个SetPageReserved函数，是对Page这个struct，进行置位，因为这部分的内存属于kernel的，所以，置位0。这也没有错，但是我其实没怎么看懂，pages这个struct Page的指针，他++是几个意思。
+
+  就你（pages+i）访问到的是什么，他也不是C++运算符重载，然后指向下一个节点呀？
+
+  ```
+  	extern char end[];
+  
+      npage = maxpa / PGSIZE;
+      pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
+  
+      for (i = 0; i < npage; i ++) {
+          SetPageReserved(pages + i);
+      }
+  ```
+
+  哦，去参考阅读一下下，3.3.3 以页为单位管理物理内存，里面有对于这段代码的详细描述。
+
+  另外，这段描述下面的参考图片我觉得很有参考价值，我放在这边
+
+![物理内存布局](.\物理内存布局.png)
+
+也就是说，这边的end之后是n个page的数据结构，来指向所谓的内存页，所以这个（pages+i）就是情有可原的。
+
+请叫我天真，这里面pages这个变量是全局的一个指针，然后
+
+```
+pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
+```
+
+这行代码的作用其实是让这个指针，指向BSS段结束位置向上4k对齐的位置的一个地址（换而言之，BSS段结束和pages这个指针的位置，中间还有点空隙
