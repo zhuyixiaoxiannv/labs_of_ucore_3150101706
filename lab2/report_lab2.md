@@ -185,34 +185,31 @@ PROVIDE(end = .);
 #### 3. pmm.c(主要是pmm_init)
 在kernel中执行的pmm_init是其顶层函数之一
 1. 第一行，boot_cr3是个在这个c文件中定义的一个变量，反正意思就是boot过程中用的页目录表基地址呗，PADDR则是一个将虚拟地址减去0xC。。。。的一个操作，但是对于虚拟地址小于这个base地址还报个错。
+```
+boot_cr3 = PADDR(boot_pgdir);
+```
 
-  ```
-  boot_cr3 = PADDR(boot_pgdir);
-  ```
-
-  
 
 2. 接下来，init_pmm_manager(),这函数就很简单，调用了default pmm_manager的一个init方法，并且输出当前的memory management的名字。
-
-  ```
+```
   static void
   init_pmm_manager(void) {
       pmm_manager = &default_pmm_manager;
       cprintf("memory management: %s\n", pmm_manager->name);
       pmm_manager->init();
   }
-  ```
+```
 
   
 
   至于pmm_manager的init
 
-  ```
+```
   default_init(void) {
       list_init(&free_list);
       nr_free = 0;
   }
-  ```
+```
 
   
 
@@ -226,9 +223,10 @@ typedef struct {
     unsigned int nr_free;           // # of free pages in this free list
 } free_area_t;
 ```
-​	其中list_entry_t 则被定义在list.h里面
+其中list_entry_t 则被定义在list.h里面
 
-​	反正就是初始化一个描述双向链表的数据结构。
+反正就是初始化一个描述双向链表的数据结构。
+
 3. 然后是page_init()
     这里面就是用到了前面探测的e820map的信息
 
@@ -236,7 +234,7 @@ typedef struct {
 
   第一步遍历所有的每个表项，然后得到mem的top（要么是KMEMSIZE，要么就是比这小的可用地址上限，反正两个取小的，这里面可用内存的上限表示为maxpa，也就是max physical address。
 
-  ```
+```
   cprintf("e820map:\n");
       int i;
       for (i = 0; i < memmap->nr_map; i ++) {
@@ -252,7 +250,7 @@ typedef struct {
       if (maxpa > KMEMSIZE) {
           maxpa = KMEMSIZE;
       }
-  ```
+```
 
   
 
@@ -268,7 +266,7 @@ typedef struct {
 
   就你（pages+i）访问到的是什么，他也不是C++运算符重载，然后指向下一个节点呀？
 
-  ```
+```
   	extern char end[];
   
       npage = maxpa / PGSIZE;
@@ -277,7 +275,7 @@ typedef struct {
       for (i = 0; i < npage; i ++) {
           SetPageReserved(pages + i);
       }
-  ```
+```
 
   哦，去参考阅读一下下，3.3.3 以页为单位管理物理内存，里面有对于这段代码的详细描述。
 
@@ -285,7 +283,9 @@ typedef struct {
 
 ![物理内存布局](.\物理内存布局.png)
 
-也就是说，这边的end之后是n个page的数据结构，来指向所谓的内存页，所以这个（pages+i）就是情有可原的。
+也就是说，这边的end之后是n个page的数据结构，来指向所谓的内存页，所以这个（pages+i）就是情有可原的。(我想说reasonable的，但是中文这个意思就很。。。)
+
+另外就是关于Page这个struct，他里面也有一个property的字段，但是，和下面的PG_property 是两个事情，SetPageReserved的时候，是对flag进行操作
 
 请叫我天真，这里面pages这个变量是全局的一个指针，然后
 
@@ -294,3 +294,97 @@ pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
 ```
 
 这行代码的作用其实是让这个指针，指向BSS段结束位置向上4k对齐的位置的一个地址（换而言之，BSS段结束和pages这个指针的位置，中间还有点空隙
+
+之后工作就是分开已占用的内存和未占用内存
+
+```
+为了简化起见，从地址0到地址pages+ sizeof(struct Page) * npage)结束的物理内存空间设定为已占用物理内存空间（起始0~640KB的空间是空闲的），地址pages+ sizeof(struct Page) * npage)以上的空间为空闲物理内存空间,这时的空闲空间起始地址为
+
+uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * npage);
+```
+
+他的做法是，先把所有的都标记上了占用，然后再把后面的部分给标记上未占用。
+
+前面的一堆对于开始和结束的if语句其实没啥啥，反正就是获取到Pages数据结构结束的位置到top的空间，然后调用
+```
+init_memmap(pa2page(begin), (end - begin) / PGSIZE);
+```
+分配给manager里面进行操作。——~~但是这个好像就把第一个节点给加进了链表~~——不懂。。。再往下看。(哦，原来是要我写)
+
+总结一下下，就是探测完可用内存后（需要考虑可用内存不连续的问题）然后kernel结束的位置end向上4k对齐之后，放置n个struct Pages的数据结构指向所有内存，一开始全都设为已经被占用，然后计算出所有可用内存占用的页号（考虑不连续问题），并设置为空闲，并用manager来进行链表数据结构的设定（这里面pmm和default_manager的功能划分和层次还是很清晰的)
+
+4. check_alloc_page（）
+
+这是默认的check的过程，不需要看，要我写的代码不在这里。就是跑到这行，对于kernel来说没啥作用，就是只是为了检查上面的函数对不对，这步之前是EXERCISE1。
+
+# 练习1：实现 first-fit 连续物理内存分配算法（需要编程）
+
+在实现first fit 内存分配算法的回收函数时，要考虑地址连续的空闲块之间的合并操作。提示:在建立空闲页块链表时，需要按照空闲页块起始地址来排序，形成一个有序的链表。可能会修改default_pmm.c中的default_init，default_init_memmap，default_alloc_pages， default_free_pages等相关函数。请仔细查看和理解default_pmm.c中的注释。
+
+请在实验报告中简要说明你的设计实现过程。请回答如下问题：
+
+你的first fit算法是否有进一步的改进空间
+
+#### Answers：
+
+首先对于前面的阅读进行一定的回顾，大概就是在pmm_init()这个函数中，已经探测所有可用地址，然后基于可用地址，切分并实现了每个页框，用Page这个struct记录，位置放在内核代码后面。并且把n个Page struct之后的所有可用地址标注为unReserved
+
+然后定义了一个alloc/free的manager，用于分配和释放可用的内存页。
+
+~~但是正如前面读的时候的问题，在page manager里面，并没有完全的实现这个双向链表的建立，就是，所有节点都弄了，但是没有搭建起来这个链表~~，具体可见default_manager的default_init_memmap这个函数。
+
+正如我之前猜想的一样，因为要动态分配内存，所以设计了block。就是一个block里面有多个page，然后list并不是用页表作为节点的，而是用block作为节点的。每个block，一个是链表，一个是这个block有多少个page
+
+```
+ *  - If this page is free and is not the first page of a free block,
+ * `p->property` should be set to 0.
+ *  - If this page is free and is the first page of a free block, `p->property`
+ * should be set to be the total number of pages in the block.
+```
+
+well，还是画个图吧
+
+我自己画了个图，emmm，这是个带头结点的双向链表，就下面那条“他的内容和page struct里表示头结点的那个是一样的”这句话，是错误的，他有个单独的头结点。
+
+空链表就一个头结点，而正确的链表实际上是头结点加上这n个page结构。
+
+![物理页分配管理](.\物理页分配管理.png)
+
+大概就是这样，如果不能理解，再多看几遍代码
+
+（我怎么看怎么觉得，这几个代码都已经写好了的样子）
+
+（也很神奇，我对比了一下跟答案的代码，差别不是很大呀，为啥一个跑的出来一个不行。。。这并不科学。
+
+哦我直接检查那个check里面的内容，发现按照原来的方式，free之后，链表并不按照地址顺序排列，而是，free的block直接插入在尾部，导致check里面的检查p0的时候，原本应该分配在p2这个页前面的一个页框，现在跑到后面去了。
+
+另外需要记录一下对于这个双向链表的遍历（貌似是通用的格式）
+
+```
+list_entry_t *le = list_next(&free_list);
+while (le != &free_list) {
+        p = le2page(le, page_link);
+        le = list_next(le);
+        ...
+}
+```
+
+哦，成功了，我之前直接把free后面多的那段代码拷贝过来的时候，没有注意到下面那个listadd，list_add 是插入在后面的，但是，前面那个while循环是寻找到第一个在之后的节点，然后在他前面插入。
+
+所以，做的事情就是，把最后那行listadd删了，再加上
+
+```
+	le=list_next(&free_list);
+	while(le != &free_list){
+        p = le2page(le, page_link);
+        if(base + base->property < p){
+            break;
+        }
+        le = list_next(le);
+ 	}
+    list_add_before(le, &(base->page_link));
+```
+
+说真的，原来的代码当中还有一个等于号，并且对等于的情况作了一个assert，但是我个人对此的考虑认为，由于alloc的情况，应该不会出现这种问题。
+
+而如果要检验的话，应该做的事情，不仅仅是考虑等于的情况，而应该是考虑下一个节点p在base到base+size这个区间内的情况都考虑进去。（个人看法）
