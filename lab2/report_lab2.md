@@ -26,7 +26,7 @@ emmm我是直接复制过去了，但是，怎么说呢，不是那么的emmmm�
 
 ~~但是正如前面读的时候的问题，在page manager里面，并没有完全的实现这个双向链表的建立，就是，所有节点都弄了，但是没有搭建起来这个链表~~，具体可见default_manager的default_init_memmap这个函数。
 
-正如我之前猜想的一样，因为要动态分配内存，所以设计了block。就是一个block里面有多个page，然后list并不是用页表作为节点的，而是用block作为节点的。每个block，一个是链表，一个是这个block有多少个page
+正如我之前猜想的一样，因为要动态分配内存，所以设计了block。就是一个block里面有多个page，然后list并不是用页框作为节点的，而是用block作为节点的。每个block，一个是链表，一个是这个block有多少个page
 
 ```
  *  - If this page is free and is not the first page of a free block,
