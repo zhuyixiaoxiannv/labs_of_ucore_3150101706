@@ -48,6 +48,14 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
+    extern uintptr_t __vectors[];
+    //修正，这里面的256，应该是要idt的大小除以gatedesc的大小来判断有多少个段描述符
+    for(int i=0 ; i< sizeof(idt)/sizeof(struct gatedesc) ; ++i){
+        SETGATE(idt[i],0,KERNEL_CS,__vectors[i],DPL_KERNEL);
+    }
+    //修正，这边加了一句对switch的更改，但是在任务中，我觉得没有表现出来
+    //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    lidt(&idt_pd);
 }
 
 static const char *
@@ -186,6 +194,9 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
+        ticks++;
+        if(ticks%TICK_NUM==0)
+            print_ticks();
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();

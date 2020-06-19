@@ -305,5 +305,17 @@ print_stackframe(void) {
       *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
       *                   the calling funciton's ebp = ss:[ebp]
       */
+    uint32_t* curr_ebp=read_ebp();
+    uint32_t* curr_eip=read_eip();
+    //读了代码之后我觉得差别不是很大，我觉得需要注意的地方是在for循环里面的终止条件里面加上了ebp != 0
+    for (int i = 0 ; curr_ebp!=NULL && i < STACKFRAME_DEPTH ; ++i )
+    {
+        cprintf("ebp:%08p eip:%08p ",curr_ebp,curr_eip);
+        cprintf("args:%08p %08p %08p %08p",*(curr_ebp+2),*(curr_ebp+3),*(curr_ebp+4),*(curr_ebp+5));
+        cprintf("\n");
+        print_debuginfo(curr_eip-1);
+        curr_eip=*(curr_ebp+1);
+        curr_ebp=*(curr_ebp);
+    }
 }
 
