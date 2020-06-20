@@ -62,5 +62,29 @@ u1s1，这个也就是直接照抄的样子，不过，大概知道了。
 这个编程不是很难，有一定的问题的地方在于我之前lab2的内容，正如keypoints里面写的那样，先调用了proc_init之后，再使用idle的进程，所以显示输出的时候，由于之前物理页框的分配不对，所以，check_swap的时候，出现了一个神奇的错误——但这个问题在lab3里面也没有出现，可能的原因是，lab3里面因为没有线程空间的调用，所以那个swap的check没啥毛病，是在调用了lab2的物理页框分配的地方出了问题，我以为他写好的，然后后面check的函数也没啥毛病，所以，我就以为没啥问题。结果，我还是too young。
 （ok，其实原来的代码是能用的，但是，怎么说呢，少了一个置位的操作罢了。
 
+函数分析
+
+```
+void
+proc_run(struct proc_struct *proc) {
+    if (proc != current) {
+        bool intr_flag;
+        struct proc_struct *prev = current, *next = proc;
+        local_intr_save(intr_flag);
+        {
+            current = proc;
+            load_esp0(next->kstack + KSTACKSIZE);
+            lcr3(next->cr3);
+            switch_to(&(prev->context), &(next->context));
+        }
+        local_intr_restore(intr_flag);
+    }
+}
+```
+
+这个intr_flag...初始化了吗？感觉没啥卵用。大概就是，如果当前运行的process不是目标process，那么就关中断，将当前任务切换到目标任务去。主要有几个，一个是堆栈段的改变，一个是页目录表的改变，还有一个是上下文的转换。就酱紫。
+
+
+
 总共创建并且运行了两个内核线程。
 作用在于，是否需要关闭中断和开启中断，也就是说，有些步骤需要关中断。
