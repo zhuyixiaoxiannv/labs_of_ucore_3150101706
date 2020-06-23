@@ -122,6 +122,8 @@ alloc_proc(void) {
     proc->flags=0;
     char name[PROC_NAME_LEN + 1]="\0";
     set_proc_name(proc,name);
+    proc->wait_state=0;
+    proc->cptr=proc->yptr=proc->optr=NULL;
     }
     return proc;
 }
@@ -417,17 +419,23 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
 	*    update step 5: insert proc_struct into hash_list && proc_list, set the relation links of process
     */
 	proc=alloc_proc();
+    if(proc==NULL){
+        cprintf("copy thread failed:bad_alloc_porc\n");
+        goto fork_out;
+    }
+    proc->parent=current;
+    assert(current->wait_state==0);
     if(ret=setup_kstack(proc)!=0){
         cprintf("copy thread failed:bad_fork_kstack\n");
         goto bad_fork_cleanup_proc; //no stack，so no need to free
     };
-    if(ret=copy_mm(clone_flags,proc)!=0){
+    if(ret=copy_mm(clone_flags& CLONE_VM,proc)!=0){
         cprintf("copy thread failed:bad_copy_mm\n");
         goto bad_fork_cleanup_kstack;
     };
     copy_thread(proc,stack,tf);
     proc->pid=get_pid();
-    list_add_before(&proc_list,&proc->list_link);
+    set_links(proc);
     hash_proc(proc);
     wakeup_proc(proc);
     ret=proc->pid;
@@ -629,6 +637,11 @@ load_icode(unsigned char *binary, size_t size) {
      *          tf_eip should be the entry point of this binary program (elf->e_entry)
      *          tf_eflags should be set to enable computer to produce Interrupt
      */
+    tf->tf_cs=USER_CS;
+    tf->tf_ds=tf->tf_es=tf->tf_ss=USER_DS;
+    tf->tf_esp=USTACKTOP;
+    tf->tf_eip=elf->e_entry;
+    tf->tf_eflags=FL_IF;
     ret = 0;
 out:
     return ret;
@@ -804,7 +817,7 @@ user_main(void *arg) {
 #ifdef TEST
     KERNEL_EXECVE2(TEST, TESTSTART, TESTSIZE);
 #else
-    KERNEL_EXECVE(exit);
+    KERNEL_EXECVE(waitkill);
 #endif
     panic("user_main execve failed.\n");
 }

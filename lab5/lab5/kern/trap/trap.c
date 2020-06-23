@@ -63,6 +63,7 @@ idt_init(void) {
     }
     //修正，这边加了一句对switch的更改，但是在任务中，我觉得没有表现出来
     //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    SETGATE(idt[T_SYSCALL],0,KERNEL_CS,__vectors[T_SYSCALL],DPL_USER);
     lidt(&idt_pd);
 }
 
@@ -232,8 +233,11 @@ trap_dispatch(struct trapframe *tf) {
          *    Every TICK_NUM cycle, you should set current process's current->need_resched = 1
          */
         ticks++;
-        if(ticks%TICK_NUM==0)
-            print_ticks();
+        current->runs++;
+        if(ticks%TICK_NUM==0){
+            //print_ticks();
+            current->need_resched=1;
+        }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
