@@ -72,7 +72,7 @@ typedef struct {
 
 在这三个init的最后，都将该设备用vfs_add_dev函数加入了vfs层的设备块链表里面，大概这就是这个init做的事情。
 
-但是虽然是inode文件的形式，实际上，却因为那个union的原因，和sfs_inode 差别不小。
+~~但是虽然是inode文件的形式，实际上，却因为那个union的原因，和sfs_inode 差别不小。~~
 
 #### sfs_init
 
@@ -157,6 +157,20 @@ struct sfs_fs {
 #### 读文件
 
 因为这部分和我要写的代码有关，所以需要认真理解。
+
+这里面开始计算了开始的偏移值和长度是否越界等等问题的检查，随后应当按照实验指导材料的说法，开头不足一整个的块和结尾的不足一整个的块单独处理，然后中间的调用sfs_bmap_load_nolock得到磁盘上的扇区号，并调用sfs_rbuf和sfs_rblock，一个是读一部分，一个是读一整块。
+
+以及
+
+```
+sfs_rbuf和sfs_rblock函数最终都调用sfs_rwblock_nolock函数完成操作，而sfs_rwblock_nolock函数调用dop_io->disk0_io->disk0_read_blks_nolock->ide_read_secs完成对磁盘的操作。
+```
+
+而这两个函数则被分别指定为sfs_buf_op和sfs_block_op
+
+这里面的sfs_bmap_load_nolock的作用是，就是文件在磁盘上面未必是连续的，而是按照扇区一个一个用disk_inode结构里面的指针所记录的。所以需要用这个来找到对应的。
+
+另外我觉得需要考虑的一个情况是，如果写入，那么需要新增分配的磁盘块给他，所以这个函数应该还有这样的作用。
 
 #### 文件系统的结构
 
